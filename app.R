@@ -679,7 +679,7 @@ server <- function(input, output, session) {
                 left_join(tot_operating_hours, by = "NAME") %>%
                 ##  calculate estimated regular hours
                 mutate(TIME = TOTOPTIME - WEIGHTTIME,
-                       PERIOD_CLASS = "Est. Regular Operations") %>%
+                       PERIOD_CLASS = "Est. Regular Operation") %>%
                 ##  Drop columns and rename to facilitate tidy rejoining:
                 dplyr::select(NAME, PERIOD_CLASS, TIME) %>%
                 rename(WEIGHTTIME = TIME)
@@ -689,8 +689,20 @@ server <- function(input, output, session) {
                 rbind(est_reg_hours) %>%
                 ##  Rename one last time:
                 rename(OPTYPE = PERIOD_CLASS,
-                       WEIGHTTIME = TIME)
-            
+                       TIME = WEIGHTTIME) %>%
+                ##  Make sure OPTYPE is a factor for proper level color coding:
+                mutate(OPTYPE = factor(OPTYPE, 
+                                       levels = c("Offline",
+                                                  "Discharge",
+                                                  "Regular Operation",
+                                                  "SemiRegular Operation",
+                                                  "Est. Regular Operation")),
+                       ##  Hard classify the coloring bc plot_ly be that way:
+                       HEX = case_when(OPTYPE == "Offline" ~ "#707070",
+                                       OPTYPE == "Discharge" ~ {rgb(t(col2rgb("tomato3"))/255)},
+                                       OPTYPE == "Regular Operation" ~ "#58b6d2",
+                                       OPTYPE == "SemiRegular Operation" ~ "#004b6c",
+                                       OPTYPE == "Est. Regular Operation" ~ "#00b5ee"))
         }
         nonreg_hours
     })
@@ -728,7 +740,7 @@ server <- function(input, output, session) {
                                                             opacity = 0.6,
                                                             textsize = "8pt")) %>%
             ##  Add the sensor location with current status and popup info:
-            addCircleMarkers(data =tw_df_current,
+            addCircleMarkers(data = tw_df_current,
                              fillColor = ~COLOR,
                              radius = 5,
                              stroke = FALSE,
@@ -791,13 +803,9 @@ server <- function(input, output, session) {
     output$donut <- renderPlotly({plot_ly(sensor_hour_df(),
                                           labels = ~OPTYPE,
                                           values = ~TIME,
-                                          marker = list(colors = c("#707070",
-                                                                            {rgb(t(col2rgb("tomato3"))/255)},
-                                                                            "#58b6d2",
-                                                                            "#004b6c",
-                                                                            "#00b5ee"),
-                                                                            line = list(color = '#FFFFFF',
-                                                                                        width = 1))) %>%
+                                          marker = list(colors = ~HEX,
+                                                        line = list(color = '#FFFFFF',
+                                                                    width = 1))) %>%
             add_pie(hole = 0.6) %>%
             layout(title = "Operational Hours by Sensor Status",  showlegend = F,
                    xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),

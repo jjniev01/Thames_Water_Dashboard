@@ -194,95 +194,138 @@ discharge_data_sf <- tw_df
 ui <- fluidPage(
     ## Application title
     titlePanel("Thames Water \"Discharge To Environment\" Data"),
-    ##  TODO:  Integrate shinyDashboardPlus in order to remove the sidebar from 
-    ##         the main page. 
     ##         See https://stackoverflow.com/questions/73791859/the-icon-that-hides-and-seek-right-sidebar-in-shinydashboardplus-is-not-workin/73853950#73853950
-    ##  SIDEBAR LAYOUT:
-    sidebarLayout(
-        ##  Date Range Selectors
-        sidebarPanel(dateRangeInput(inputId = "daterange",
-                                    label = "Dates of Interest",
-                                    ##  Default to 30 days prior
-                                    start = {Sys.Date()-30},
-                                    ##  Default to the current date
-                                    end = NULL,
-                                    min = "2022-04-01",
-                                    max = Sys.Date(),
-                                    autoclose = TRUE), 
-                     ##  br() element to introduce extra vertical spacing ----
-                     br(),
-                     ##  River Catchment Selector
-                     selectInput(inputId = "catchment", 
-                                 label = "River Mgmt. Catchment:",
-                                 choices = as.list(c("All",
-                                                     levels(riv_cat$MNCAT_NAME))),
-                                 ##  Default value
-                                 selected = "All"
-                                 ##  TODO: Can allow for multiple selections, but will need to 
-                                 ##        make proper handling for creating the API query; 
-                                 ##        simple first
-                     ),
-                     ##  TODO: Make this a drill down
-                     ##  Sensor Selector
-                     selectInput(inputId = "sensor", 
-                                 label = "Sensor:",
-                                 choices = as.list(c("All",
-                                                     levels(tw_df_current$NAME))),
-                                 ##  Default value
-                                 selected = "All"
-                                 ##  TODO: Can allow for multiple selections, 
-                                 ##  will then filter from the retrieved data; 
-                                 ##  might make this API queries instead?
-                     ),
-                     ##  TODO: Add action button that submits the API request 
-                     ##  rather than automatically downloading on changed date 
-                     ##  that way it isn't spamming API queries with every 
-                     ##  sidebar reactive value change
-                     ##  sidebarPanel End  ---
-                     width = 3
+    tabsetPanel(
+        ##  Initial Tab: Current Status Map
+        tabPanel(
+            ##  No Sidebar for this panel  ##
+            ##  Tab title text
+            title = 'Current Network Status', 
+            fluid = TRUE,
+            ##  Current and Recent Discharge Status Map
+            mainPanel(
+                leafletOutput("currentmap")
+                ##  mainPanel End ---
+            )
+            ##  tabPanel End ---
         ),
-        
-        
-        ##  mainPanel for Displaying Outputs
-        mainPanel(
-            tabsetPanel(
-                type = "tabs",
-                
-                ##  Main Tab: Current Status
-                tabPanel(
-                    ##  Tab title text
-                    "Current Network Status",
-                    ##  Current and Recent Discharge Status Map
-                    leafletOutput("currentmap"),
-                    
-                    ##  tabPanel End ---
+        ##  Discharge Events Timeline and Frequency Tabs
+        tabPanel(
+            ##  Tab title text
+            title = "Discharge Events Summary",
+            fluid = TRUE,
+            ##  SIDEBAR LAYOUT:
+            sidebarLayout(
+                ##  Date Range Selectors
+                sidebarPanel(dateRangeInput(inputId = "daterange",
+                                            label = "Dates of Interest",
+                                            ##  Default to 30 days prior
+                                            start = {Sys.Date()-30},
+                                            ##  Default to the current date
+                                            end = NULL,
+                                            min = "2022-04-01",
+                                            max = Sys.Date(),
+                                            autoclose = TRUE),
+                             ##  br() element to introduce extra vertical spacing ----
+                             br(),
+                             ##  River Catchment Selector
+                             selectInput(inputId = "catchment",
+                                         label = "River Mgmt. Catchment:",
+                                         choices = as.list(c("All",
+                                                             levels(riv_cat$MNCAT_NAME))),
+                                         ##  Default value
+                                         selected = "All"
+                                         ##  TODO: Can allow for multiple selections, but will need to
+                                         ##        make proper handling for creating the API query;
+                                         ##        simple first
+                             ),
+                             ##  TODO: Make this a drill down
+                             ##  Sensor Selector
+                             selectInput(inputId = "sensor",
+                                         label = "Sensor:",
+                                         choices = as.list(c("All",
+                                                             levels(tw_df_current$NAME))),
+                                         ##  Default value
+                                         selected = "All"
+                                         ##  TODO: Can allow for multiple selections, but will need to
+                                         ##        make proper handling for creating the API query;
+                                         ##        simple first
+                             )
+                             ##  sidebarPanel End  ---
                 ),
                 
-                ##  Discharge Events Tab
-                tabPanel(
-                    ##  Tab title text
-                    title = "Discharge Events Summary",
+                ##  Graphical objects  ---
+                mainPanel(
                     ##  TODO:  Populate this with other graphics
                     ##  Graphical objects  ---
                     plotlyOutput("timeline"),
                     plotlyOutput("donut"),
                     plotlyOutput("event_histo")
-                    ##  TabPanel End ---
+                    ##  mainPanel End  ---
+                )             
+                ##  sidebarLayout End  ---
+            ),
+            ##  TabPanel End ---
+        ),
+        
+        ##  Discharge (Raw-ish) Table Tab
+        tabPanel(
+            ## Tab Title Text
+            title = "Tables",
+            fluid = TRUE,
+            ##  SIDEBAR LAYOUT:
+            sidebarLayout(
+                ##  Date Range Selectors
+                sidebarPanel(dateRangeInput(inputId = "daterange",
+                                            label = "Dates of Interest",
+                                            ##  Default to 30 days prior
+                                            start = {Sys.Date()-30},
+                                            ##  Default to the current date
+                                            end = NULL,
+                                            min = "2022-04-01",
+                                            max = Sys.Date(),
+                                            autoclose = TRUE),
+                             ##  br() element to introduce extra vertical spacing ----
+                             br(),
+                             ##  River Catchment Selector
+                             selectInput(inputId = "catchment",
+                                         label = "River Mgmt. Catchment:",
+                                         choices = as.list(c("All",
+                                                             levels(riv_cat$MNCAT_NAME))),
+                                         ##  Default value
+                                         selected = "All"
+                                         ##  TODO: Can allow for multiple selections, but will need to
+                                         ##        make proper handling for creating the API query;
+                                         ##        simple first
+                             ),
+                             ##  TODO: Make this a drill down
+                             ##  Sensor Selector
+                             selectInput(inputId = "sensor",
+                                         label = "Sensor:",
+                                         choices = as.list(c("All",
+                                                             levels(tw_df_current$NAME))),
+                                         ##  Default value
+                                         selected = "All"
+                                         ##  TODO: Can allow for multiple selections, but will need to
+                                         ##        make proper handling for creating the API query;
+                                         ##        simple first
+                             )
+                             ##  sidebarPanel End  ---
                 ),
                 
-                ##  Discharge (Raw-ish) Table Tab
-                tabPanel(
-                    ## Tab Title Text
-                    title = "Tables",
+                ##  
+                ##  TODO:  POPULATE THIS WITH OTHER TABLE VIEWS
+                mainPanel(
                     ##  TODO:  POPULATE THIS WITH OTHER TABLE VIEWS
                     DTOutput("dischargeDT_view")
                     ##  tabPanel End ---
+                    ##  mainPanel End  ---
                 )
-                ##  TabsetPanel End ---
+                ##  sidebarLayout End  ---
             )
-            ##  mainPanel End ---
+            ##  tabPanel End ---
         )
-        ## sideBarLayout End ---
+        ##  tabsetPanel End ---
     )
     ##  UI End ---
 )
@@ -805,12 +848,15 @@ server <- function(input, output, session) {
                                           values = ~TIME,
                                           marker = list(colors = ~HEX,
                                                         line = list(color = '#FFFFFF',
-                                                                    width = 1))) %>%
+                                                                    width = 1)),
+                                          insidetextorientation='radial') %>%
             add_pie(hole = 0.6) %>%
             layout(title = "Operational Hours by Sensor Status",  showlegend = F,
                    xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
                    yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
-                   margin = list(l = 65))
+                   margin = list(l = 50, r = 50,
+                                 b = 50, t = 100,
+                                 pad = 20))
     })
         
     
@@ -829,7 +875,9 @@ server <- function(input, output, session) {
                                         alpha = 0.5),
                           x = ~TIME,
                           showlegend = FALSE) %>%
-            layout(barmode = "overlay")
+            layout(barmode = "overlay",
+                   yaxis = list(title = "Frequency of Events"),
+                   xaxis = list(title = "Duration of Event (Hours)"))
     })
     
     

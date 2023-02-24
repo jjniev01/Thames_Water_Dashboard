@@ -222,7 +222,7 @@ ui <- fluidPage(
                                             ##  Default to 30 days prior
                                             start = {Sys.Date()-30},
                                             ##  Default to the current date
-                                            end = NULL,
+                                            end = {Sys.Date()},
                                             min = "2022-04-01",
                                             max = Sys.Date(),
                                             autoclose = TRUE),
@@ -232,7 +232,7 @@ ui <- fluidPage(
                              selectInput(inputId = "catchment",
                                          label = "River Mgmt. Catchment:",
                                          choices = as.list(c("All",
-                                                             levels(riv_cat$MNCAT_NAME))),
+                                                             riv_cat$MNCAT_NAME)),
                                          ##  Default value
                                          selected = "All"
                                          ##  TODO: Can allow for multiple selections, but will need to
@@ -260,7 +260,7 @@ ui <- fluidPage(
                     ##  Graphical objects  ---
                     plotlyOutput("timeline"),
                     plotlyOutput("donut"),
-                    plotlyOutput("event_histo")
+                    plotlyOutput("event_vio")
                     ##  mainPanel End  ---
                 )             
                 ##  sidebarLayout End  ---
@@ -849,35 +849,132 @@ server <- function(input, output, session) {
                                           marker = list(colors = ~HEX,
                                                         line = list(color = '#FFFFFF',
                                                                     width = 1)),
-                                          insidetextorientation='radial') %>%
+                                          insidetextorientation='radial',
+                                          rotation = 90) %>%
             add_pie(hole = 0.6) %>%
-            layout(title = "Operational Hours by Sensor Status",  showlegend = F,
-                   xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
-                   yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+            layout(title = "Operational Hours by Sensor Status",  
+                   showlegend = TRUE,
+                   xaxis = list(showgrid = FALSE, 
+                                zeroline = FALSE, 
+                                showticklabels = FALSE),
+                   yaxis = list(showgrid = FALSE, 
+                                zeroline = FALSE, 
+                                showticklabels = FALSE),
                    margin = list(l = 50, r = 50,
-                                 b = 50, t = 100,
+                                 b = 50, t = 1,
                                  pad = 20))
     })
         
     
-    ##  HISTOGRAM OF EVENT DURATIONS
-    output$event_histo <- renderPlotly({
-        plot_ly() %>%
-            add_histogram(data = filter(sensor_hour_df(), 
-                                        OPTYPE == "Discharge"),
-                                        marker = list(color = c("#707070"),
-                                                      alpha = 0.5),
-                          x = ~TIME,
-                          showlegend = FALSE) %>%
-            add_histogram(data = filter(sensor_hour_df(), 
-                                        OPTYPE == "Offline"),
-                          marker = list(color = {rgb(t(col2rgb("tomato3"))/255)},
-                                        alpha = 0.5),
-                          x = ~TIME,
-                          showlegend = FALSE) %>%
-            layout(barmode = "overlay",
-                   yaxis = list(title = "Frequency of Events"),
-                   xaxis = list(title = "Duration of Event (Hours)"))
+    ##  VIOLINPLOT (RIDGEPLOT) OF EVENT DURATIONS
+    output$event_vio <- renderPlotly({
+        foo_vio_1 <- plot_ly(type = "violin",
+                             x = filter(sensor_hour_df(),
+                                        OPTYPE == "Offline") %>% pull(TIME),
+                             color = I("#707070"),
+                             side = "positive",
+                             box = list(visible = TRUE),
+                             meanline = list(visible = TRUE))%>%
+            layout(xaxis = list(title = "Event Duration (Hours)"),
+                   yaxis = list(title = "Frequency"),
+                   domain = list(x = c(0,1), y = c(0.8,1.0)))
+        foo_vio_2 <- plot_ly(type = "violin",
+                             x = filter(sensor_hour_df(),
+                                        OPTYPE == "Discharge") %>% pull(TIME),
+                             color = I({rgb(t(col2rgb("tomato3"))/255)}),
+                             side = "positive",
+                             box = list(visible = TRUE),
+                             meanline = list(visible = TRUE))%>%
+            layout(xaxis = list(title = "Event Duration (Hours)"),
+                   yaxis = list(title = "Frequency"),
+                   domain = list(x = c(0,1), y = c(0.6,0.8)))
+        foo_vio_3 <- plot_ly(type = "violin",
+                             x = filter(sensor_hour_df(),
+                                        OPTYPE == "Regular Operation") %>% pull(TIME),
+                             color = I("#58b6d2"),
+                             side = "positive",
+                             box = list(visible = TRUE),
+                             meanline = list(visible = TRUE))%>%
+            layout(xaxis = list(title = "Event Duration (Hours)"),
+                   yaxis = list(title = "Frequency"),
+                   domain = list(x = c(0,1), y = c(0.4,0.6)))
+        foo_vio_4 <- plot_ly(type = "violin",
+                             x = filter(sensor_hour_df(),
+                                        OPTYPE == "SemiRegular Operation") %>% pull(TIME),
+                             color = I("#004b6c"),
+                             side = "positive",
+                             box = list(visible = TRUE),
+                             meanline = list(visible = TRUE)) %>%
+            layout(xaxis = list(title = "Event Duration (Hours)"),
+                   yaxis = list(title = "Frequency"),
+                   domain = list(x = c(0,1), y = c(0.2,0.4)))
+        foo_vio_5 <- plot_ly(type = "violin",
+                             x = filter(sensor_hour_df(),
+                                        OPTYPE == "Est. Regular Operation") %>% pull(TIME),
+                             color = I("#00b5ee"),
+                             side = "positive",
+                             box = list(visible = TRUE),
+                             meanline = list(visible = TRUE)) %>%
+            layout(xaxis = list(title = "Event Duration (Hours)"),
+                   yaxis = list(title = "Frequency"),
+                   domain = list(x = c(0,1), y = c(0.0,0.2)))
+        
+        ##  Create a 1x5 (rc) series of subplots
+        subplot(list(foo_vio_1, foo_vio_2,
+                     foo_vio_3, foo_vio_4,
+                     foo_vio_5),
+                nrows = 5, 
+                titleX = TRUE,
+                titleY = TRUE,
+                margin = 0.1,
+                heights = c(0.2, 
+                            0.2,
+                            0.2,
+                            0.2,
+                            0.2)) %>%
+            ##  Update subplot titles locations and such
+            layout(annotations = list( 
+                list(x = 0.2,  
+                     y = 1.0,  
+                     text = "Offline",  
+                     xref = "paper",  
+                     yref = "paper",  
+                     xanchor = "center",  
+                     yanchor = "bottom",  
+                     showarrow = FALSE),  
+                list(x = 0.2,  
+                     y = 1.0,  
+                     text = "Discharge",  
+                     xref = "paper",  
+                     yref = "paper",  
+                     xanchor = "center",  
+                     yanchor = "bottom",  
+                     showarrow = FALSE),  
+                list(x = 0.2,  
+                     y = 1.0,  
+                     text = "Regular Operations",  
+                     xref = "paper",  
+                     yref = "paper",  
+                     xanchor = "center",  
+                     yanchor = "bottom",  
+                     showarrow = FALSE),  
+                list(x = 0.2,  
+                     y = 1.0,  
+                     text = "SemiRegular Operation",  
+                     xref = "paper",  
+                     yref = "paper",  
+                     xanchor = "center",  
+                     yanchor = "bottom",  
+                     showarrow = FALSE),  
+                list(x = 0.2,  
+                     y = 1.0,  
+                     text = "Est. Regular Operation",  
+                     xref = "paper",  
+                     yref = "paper",  
+                     xanchor = "center",  
+                     yanchor = "bottom",  
+                     showarrow = FALSE)
+                ))
     })
     
     

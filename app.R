@@ -645,7 +645,7 @@ server <- function(input, output, session) {
     
     
     ##  Event duration data classified by type:
-    sensor_prop_status_df <- reactive({
+    tot_operating_hours <- reactive({
         if(!stringr::str_detect(enddate(),"NA.*")){
             sensor_prop_df <- discharge_data_sf() %>%
                 ##  Drop geometry:
@@ -688,7 +688,43 @@ server <- function(input, output, session) {
                 mutate(TOTOPTIME = as.numeric(MAXTIME-MINTIME)/60/60) %>%
                 ungroup() %>%
                 ##  Drop all but necessary columns:
-                dplyr::select(NAME,TOTOPTIME)
+                dplyr::select(NAME,TOTOPTIME)}
+        ##  Return it:
+        tot_operating_hours
+        })
+    
+    
+    sensor_prop_status_df <- reactive({
+        if(!stringr::str_detect(enddate(),"NA.*")){
+            sensor_prop_df <- discharge_data_sf() %>%
+                ##  Drop geometry:
+                st_drop_geometry() %>%
+                ##  Subset columns:
+                select(NAME, AlertType, DateTime) %>%
+                group_by(NAME) %>%
+                ##  Arrange in ascending order:
+                arrange(DateTime) %>%
+                ##  Lead the date and alert:
+                mutate(TIMELEAD = lead(DateTime, n = 1),
+                       ALERTLEAD = lead(AlertType, n = 1)) %>%
+                ungroup() %>%
+                ##  Classify the time period:
+                mutate(PERIOD_TYPE = paste0(AlertType, 
+                                            "-",
+                                            ALERTLEAD)) %>%
+                ## Remove any unresolved periods, i.e. ending with -NA:
+                dplyr::filter(!(stringr::str_detect(PERIOD_TYPE, ".*-NA")))
+            
+            
+            ##  Summarise time by period type:
+            sensor_prop_summ_df <- sensor_prop_df %>% 
+                group_by(NAME) %>%
+                ##  Calculate the time of each period in hours:
+                mutate(DURATION = as.numeric(TIMELEAD - DateTime)/60/60) %>%
+                ungroup() %>%
+                group_by(NAME, PERIOD_TYPE) %>%
+                summarise(PERIODTIME = sum(DURATION, na.rm = TRUE))
+            
                 
             ##  Rejoin the tot operating time to the summarised period data and 
             ##  back infer normal operating time:
@@ -698,7 +734,7 @@ server <- function(input, output, session) {
                 dplyr::filter(!(PERIOD_TYPE %in% 
                                     c("Offline stop-Start",
                                       "Stop-Start"))) %>%
-                left_join(tot_operating_hours, by = "NAME") %>%
+                left_join(tot_operating_hours(), by = "NAME") %>%
                 ##  If the total operating hours for a given sensor is less than
                 ##  168 hours (7 days), we'll assign it a quality flag:
                 mutate(QA_FLAG = case_when(TOTOPTIME < 168 ~ "Low Hours in Record",
@@ -764,7 +800,7 @@ server <- function(input, output, session) {
                 group_by(NAME) %>%
                 summarise(WEIGHTTIME = sum(WEIGHTTIME, na.rm = TRUE)) %>%
                 ##  Join the total hours back to this:
-                left_join(tot_operating_hours, by = "NAME") %>%
+                left_join(tot_operating_hours(), by = "NAME") %>%
                 ##  calculate estimated regular hours
                 mutate(TIME = TOTOPTIME - WEIGHTTIME,
                        PERIOD_CLASS = "Est. Regular Operation") %>%

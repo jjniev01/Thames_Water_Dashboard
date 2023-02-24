@@ -96,6 +96,9 @@ riv_cat_df <- riv_cat %>%
            LAT = st_coordinates(.)[,2]) %>%
     st_drop_geometry()
 
+##  Load the lookup table for the receiving water course, river mgmt catchment, 
+##  and sensor name:
+sensor_catchment_lookup <- readRDS("./Data/TW_Sensor_WaterCourse_MgmtCatchment_Lookup.RDS")
 
 ##  Load initial water data to determine current/recent status and transform to 
 ##  WGS84 for mapbox:
@@ -112,8 +115,7 @@ if (httr::status_code(res_current) != 200){
     ##  Retrieve data and transform to more suitable format 
     tw_df_current <- dplyr::bind_rows(content$items) %>%
         ##  Convert the column types:
-        mutate(LocationName = factor(LocationName),
-               ReceivingWaterCourse = factor(ReceivingWaterCourse),
+        mutate(ReceivingWaterCourse = factor(ReceivingWaterCourse),
                AlertStatus = factor(AlertStatus),
                StatusChange = as.POSIXct(StatusChange,
                                          format="%Y-%m-%dT%H:%M:%S",
@@ -124,7 +126,7 @@ if (httr::status_code(res_current) != 200){
                                                           tz=Sys.timezone()),
                MostRecentDischargeAlertStop =as.POSIXct(MostRecentDischargeAlertStop,
                                                         format="%Y-%m-%dT%H:%M:%S",
-                                                        tz=Sys.timezone()))%>%
+                                                        tz=Sys.timezone())) %>%
         ##  Rename the columns:
         rename(GRIDREF = LocationGridRef,
                NAME = LocationName,
@@ -134,7 +136,7 @@ if (httr::status_code(res_current) != 200){
                ALERTSTAT = AlertStatus,
                LASTCHANG = StatusChange,
                LASTSTART = MostRecentDischargeAlertStart,
-               LASTSTOP = MostRecentDischargeAlertStop)%>% 
+               LASTSTOP = MostRecentDischargeAlertStop) %>% 
         ##  Convert to sf object:
         st_as_sf(coords = c("X","Y"), crs = 27700) %>%
         ##  Convert to WGS84:
@@ -159,12 +161,15 @@ if (httr::status_code(res_current) != 200){
                                    DISRECENT == "Discharge in Last 48hrs" ~ "Discharge in Last 48hrs",
                                    TRUE ~ "Offline")) %>%
         ##  Determine it's river catchment:
-        st_join(riv_cat) %>%
-        ##  Correct the missing catchment values to "London":
-        mutate(MNCAT_NAME = case_when(is.na(MNCAT_NAME) ~ "London",
-                                      TRUE ~ MNCAT_NAME)) %>%
-        rename(CATCH = MNCAT_NAME) %>%
-        mutate(CATCH = factor(CATCH))
+        # st_join(riv_cat) %>%
+        # ##  Correct the missing catchment values to "London":
+        # mutate(MNCAT_NAME = case_when(is.na(MNCAT_NAME) ~ "London",
+        #                               TRUE ~ MNCAT_NAME)) %>%
+        left_join(dplyr::select(sensor_catchment_lookup, !RECWATCOURS), 
+                  by = "NAME") %>%
+        ##  Convert remaining columns as necessary:
+        mutate(MNCAT_NAME = factor(MNCAT_NAME),
+               NAME = factor(NAME))
 }
 
 
@@ -183,12 +188,18 @@ tw_df <-
     st_as_sf() %>%
     st_transform(crs = 4326) %>%
     mutate(LON = st_coordinates(.)[,1],
-           LAT = st_coordinates(.)[,2])%>%
+           LAT = st_coordinates(.)[,2]) %>%
     ##  Spatial join to the river catchments:
-    st_join(riv_cat) %>%
-    ##  Correct the missing catchment values to "London":
-    mutate(MNCAT_NAME = case_when(is.na(MNCAT_NAME) ~ "London",
-                                  TRUE ~ MNCAT_NAME))
+    # st_join(riv_cat) %>%
+    # ##  Correct the missing catchment values to "London":
+    # mutate(MNCAT_NAME = case_when(is.na(MNCAT_NAME) ~ "London",
+    #                               TRUE ~ MNCAT_NAME))
+    left_join(dplyr::select(sensor_catchment_lookup, !RECWATCOURS), 
+              by = "NAME") %>%
+    ##  Convert remaining columns as necessary:
+    mutate(MNCAT_NAME = factor(MNCAT_NAME),
+           NAME = factor(NAME))
+
 discharge_data_sf <- tw_df
 
 startdate <- reactive({paste0({Sys.Date()-30},
@@ -484,9 +495,14 @@ server <- function(input, output, session) {
                     mutate(LON = st_coordinates(.)[,1],
                            LAT = st_coordinates(.)[,2]) %>%
                     ##  Spatial join to the river catchments:
-                    st_join(riv_cat) %>%
+                    # st_join(riv_cat) %>%
                     ##  Replace NAs in MNCAT_NAME with "London" as that is their 
                     ##  proper designation, but there is a 
+                    left_join(dplyr::select(sensor_catchment_lookup, !RECWATCOURS), 
+                              by = "NAME") %>%
+                    ##  Convert remaining columns as necessary:
+                    mutate(MNCAT_NAME = factor(MNCAT_NAME),
+                           NAME = factor(NAME))
                 
                 ##  If there is a subset by river catchments:
                 # cat(curr_catchment())

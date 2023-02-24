@@ -160,6 +160,9 @@ if (httr::status_code(res_current) != 200){
                                    TRUE ~ "Offline")) %>%
         ##  Determine it's river catchment:
         st_join(riv_cat) %>%
+        ##  Correct the missing catchment values to "London":
+        mutate(MNCAT_NAME = case_when(is.na(MNCAT_NAME) ~ "London",
+                                      TRUE ~ MNCAT_NAME)) %>%
         rename(CATCH = MNCAT_NAME) %>%
         mutate(CATCH = factor(CATCH))
 }
@@ -182,7 +185,10 @@ tw_df <-
     mutate(LON = st_coordinates(.)[,1],
            LAT = st_coordinates(.)[,2])%>%
     ##  Spatial join to the river catchments:
-    st_join(riv_cat)
+    st_join(riv_cat) %>%
+    ##  Correct the missing catchment values to "London":
+    mutate(MNCAT_NAME = case_when(is.na(MNCAT_NAME) ~ "London",
+                                  TRUE ~ MNCAT_NAME))
 discharge_data_sf <- tw_df
 
 startdate <- reactive({paste0({Sys.Date()-30},
@@ -478,7 +484,9 @@ server <- function(input, output, session) {
                     mutate(LON = st_coordinates(.)[,1],
                            LAT = st_coordinates(.)[,2]) %>%
                     ##  Spatial join to the river catchments:
-                    st_join(riv_cat)
+                    st_join(riv_cat) %>%
+                    ##  Replace NAs in MNCAT_NAME with "London" as that is their 
+                    ##  proper designation, but there is a 
                 
                 ##  If there is a subset by river catchments:
                 # cat(curr_catchment())

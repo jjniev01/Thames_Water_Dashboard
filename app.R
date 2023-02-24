@@ -185,6 +185,11 @@ tw_df <-
     st_join(riv_cat)
 discharge_data_sf <- tw_df
 
+startdate <- reactive({paste0({Sys.Date()-30},
+                              "T00:00:00")})
+enddate <- reactive({paste0(Sys.Date(),
+                            "T00:00:00")})
+
 ##  ---  ##
 
 
@@ -232,7 +237,7 @@ ui <- fluidPage(
                              selectInput(inputId = "catchment",
                                          label = "River Mgmt. Catchment:",
                                          choices = as.list(c("All",
-                                                             riv_cat$MNCAT_NAME)),
+                                                             unique(riv_cat$MNCAT_NAME))),
                                          ##  Default value
                                          selected = "All"
                                          ##  TODO: Can allow for multiple selections, but will need to
@@ -492,6 +497,22 @@ server <- function(input, output, session) {
     
     
     
+    ##  Update the potential sensors to select from based upon the selected 
+    ##  catchment which was used to filter discharge_data_sf
+    out_var_sensors <- reactive({c( "All", 
+                                    {discharge_data_sf() %>% 
+                                            mutate(across(where(is.factor),
+                                                          as.character)) %>%
+                                            pull(NAME) %>%
+                                            unique()} )})
+    ##    Update the selection list in the UI:
+    observe({updateSelectInput(session = session,
+                               "sensor",
+                               choices = out_var_sensors())})
+    
+    
+    
+    
     ##  Presentation, non-spatial version of the discharge data:
     discharge_data_df <- reactive({
         ##  Only calc if the end date is not null
@@ -515,7 +536,7 @@ server <- function(input, output, session) {
     })
     
     
-        
+    
     
     ##  Time df of events for plotting across time:
     discharge_time_df <- reactive({

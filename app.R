@@ -296,7 +296,8 @@ ui <- fluidPage(
                     ##  Graphical objects  ---
                     plotlyOutput("timeline"),
                     plotlyOutput("donut"),
-                    plotlyOutput("event_vio")
+                    plotlyOutput("event_vio"),
+                    textOutput("test")
                     ##  mainPanel End  ---
                 )             
                 ##  sidebarLayout End  ---
@@ -362,6 +363,7 @@ ui <- fluidPage(
                 mainPanel(
                     ##  TODO:  POPULATE THIS WITH OTHER TABLE VIEWS
                     DTOutput("dischargeDT_view")
+                    
                     ##  tabPanel End ---
                     ##  mainPanel End  ---
                 )
@@ -380,47 +382,52 @@ ui <- fluidPage(
 ##  SERVER  --------------------------------------------------------------------
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
-    ## TODO: LONGTERM - Examine how I can make the below things reactive.
     ## TODO: Calculate summary stats on the entire service area and by drainage basin/watercourse
     ## TODO: Determine the average time between discharges for each sensor (will 
     ##       need to clean those lasting less than 30min and assume those are sensor errors)
 
 
+    startdate <- reactive({paste0(as.character(input$daterange[1]),"T00:00:00")})
+    enddate <- reactive({paste0(as.character(input$daterange[2]),"T00:00:00")})
     
+    test_params <- reactive({paste("limit=1000",
+                         sprintf(tw_date_query_temp_start, 
+                                 "1", "1", "1",
+                                 startdate()),
+                         sprintf(tw_date_query_temp_end,
+                                 "2", "2", "2",
+                                 enddate()),
+                         sep = "&")})
     ##  REACTIVE DATA QUERY  ---------------------------------------------------
     ##  Observe for changes in the input date range and grab them for formatting
     ##  in the API query and also store the river catchment for the local 
     ##  filtering of data:
-    startdate <- reactive({paste0(as.character(input$daterange[1]),
-                                  "T00:00:00")})
-    enddate <- reactive({paste0(as.character(input$daterange[2]),
-                                "T00:00:00")})
-    
     discharge_data_sf <- reactiveValues()
+    
     ##  Data retrieval:
     observeEvent(
         ##  If the date range changes
         input$daterange,
         {
-            ##  If there is no NA in the end date:
-            if(!stringr::str_detect(enddate(),"NA.*")){
-                ##    Set query parameters to retrieve the 
-                ##    observations 30 days prior from the 
-                ##    present date:
-                params <- paste("limit=1000&",
-                                sprintf(tw_date_query_temp_start, 
-                                        "1", "1", "1",
-                                        startdate()),
-                                sprintf(tw_date_query_temp_end,
-                                        "2", "2", "2",
-                                        enddate()),
-                                sep="&")
-                
-                ##  Download the data from the API
-                foo_dis_dat <- tw_data_download(params, 
-                                                client_id,
-                                                client_secret)
-            }
+            ##    Set query parameters to retrieve the 
+            ##    observations 30 days prior from the 
+            ##    present date:
+            params <- paste("limit=1000",
+                            sprintf(tw_date_query_temp_start, 
+                                    "1", "1", "1",
+                                    startdate()),
+                            sprintf(tw_date_query_temp_end,
+                                    "2", "2", "2",
+                                    enddate()),
+                            sep = "&")
+            
+            ##  Download the data from the API
+            foo_dis_dat <- tw_data_download(params, 
+                                            client_id,
+                                            client_secret,
+                                            startdate(),
+                                            enddate())
+            
             
             dis_dat_sf <- foo_dis_dat %>%
                 ##  Convert the column types:
@@ -1097,10 +1104,10 @@ server <- function(input, output, session) {
     
     ##  TEST SELECTION RESULTS
     output$test <- renderText({
-        sprintf("StartDate: %s\nEndDate: %s\nCatchment: %s",
+        sprintf("StartDate: %s\nEndDate: %s\n\n%s",
                 startdate(),
                 enddate(),
-                curr_catchment())
+                test_params())
     })
     
 }

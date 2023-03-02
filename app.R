@@ -20,9 +20,13 @@ library(DT)
 # options(shiny.reactlog=TRUE)
 # options(shiny.error = browser)
 
+##  SOURCING OF FUNCTIONS  -----------------------------------------------------
+source("./Modules/TW_Data_Download_function.R")
 
 
-##  STATIC VARIABLES  ------------------------------------------------------
+
+
+##  STATIC VARIABLES  ----------------------------------------------------------
 api_root <- 'https://prod-tw-opendata-app.uk-e1.cloudhub.io/'
 ##  Discharge alert database endpoint:
 data_endpoint <- 'data/STE/v1/DischargeAlerts'
@@ -183,29 +187,29 @@ if (httr::status_code(res_current) != 200){
 ##  
 ##  WARNING: THIS SHOULD ONLY BE UNCOMMENTED FOR USE IN TESTING THE REACTIVE 
 ##  ITEMS IN THE CONSOLE ONE BY ONE AND NOT  FOR REACTIVE TESTING
-tw_df <- 
-    readRDS("./Data/TW_Alert_Data_lim150_all_sensors_2023_01_23.RDS") %>% 
-    st_as_sf() %>%
-    st_transform(crs = 4326) %>%
-    mutate(LON = st_coordinates(.)[,1],
-           LAT = st_coordinates(.)[,2]) %>%
-    ##  Spatial join to the river catchments:
-    # st_join(riv_cat) %>%
-    # ##  Correct the missing catchment values to "London":
-    # mutate(MNCAT_NAME = case_when(is.na(MNCAT_NAME) ~ "London",
-    #                               TRUE ~ MNCAT_NAME))
-    left_join(dplyr::select(sensor_catchment_lookup, !RECWATCOURS), 
-              by = "NAME") %>%
-    ##  Convert remaining columns as necessary:
-    mutate(MNCAT_NAME = factor(MNCAT_NAME),
-           NAME = factor(NAME))
+# tw_df <-
+#     readRDS("./Data/TW_Alert_Data_lim150_all_sensors_2023_01_23.RDS") %>%
+#     st_as_sf() %>%
+#     st_transform(crs = 4326) %>%
+#     mutate(LON = st_coordinates(.)[,1],
+#            LAT = st_coordinates(.)[,2]) %>%
+#     ##  Spatial join to the river catchments:
+#     # st_join(riv_cat) %>%
+#     # ##  Correct the missing catchment values to "London":
+#     # mutate(MNCAT_NAME = case_when(is.na(MNCAT_NAME) ~ "London",
+#     #                               TRUE ~ MNCAT_NAME))
+#     left_join(dplyr::select(sensor_catchment_lookup, !RECWATCOURS),
+#               by = "NAME") %>%
+#     ##  Convert remaining columns as necessary:
+#     mutate(MNCAT_NAME = factor(MNCAT_NAME),
+#            NAME = factor(NAME))
+# 
+# discharge_data_sf <- tw_df
 
-discharge_data_sf <- tw_df
-
-startdate <- reactive({paste0({Sys.Date()-30},
-                              "T00:00:00")})
-enddate <- reactive({paste0(Sys.Date(),
-                            "T00:00:00")})
+# startdate <- paste0({Sys.Date()-30},
+#                               "T00:00:00")
+# enddate <- paste0(Sys.Date(),
+#                             "T00:00:00")
 
 ##  ---  ##
 
@@ -253,26 +257,36 @@ ui <- fluidPage(
                              ##  River Catchment Selector
                              selectInput(inputId = "catchment",
                                          label = "River Mgmt. Catchment:",
-                                         choices = as.list(c("All",
-                                                             unique(riv_cat$MNCAT_NAME))),
+                                         choices = c("", 
+                                                     unique(riv_cat$MNCAT_NAME)),
                                          ##  Default value
-                                         selected = "All"
+                                         selected = ""
                                          ##  TODO: Can allow for multiple selections, but will need to
                                          ##        make proper handling for creating the API query;
                                          ##        simple first
                              ),
-                             ##  TODO: Make this a drill down
-                             ##  Sensor Selector
-                             selectInput(inputId = "sensor",
-                                         label = "Sensor:",
-                                         choices = as.list(c("All",
-                                                             levels(tw_df_current$NAME))),
+                             ##  Receiving watercourse selector
+                             selectInput(inputId = "recwat",
+                                         label = "Receiving Water Course:",
+                                         choices = c("", 
+                                                     unique(sensor_catchment_lookup$RECWATCOURS)),
                                          ##  Default value
-                                         selected = "All"
+                                         selected = ""
                                          ##  TODO: Can allow for multiple selections, but will need to
                                          ##        make proper handling for creating the API query;
                                          ##        simple first
-                             )
+                             ),
+                             
+                             ##  Sensor selector:
+                             selectInput(inputId = "sensor",
+                                         label = "Select all sensors of interest:",
+                                         choices = c("", 
+                                                     unique(sensor_catchment_lookup$NAME)),
+                                         selected = "",
+                                         multiple = TRUE),
+                             ##  Button to reset the filters and such
+                             actionButton("reset", "Reset")
+                             
                              ##  sidebarPanel End  ---
                 ),
                 
@@ -312,26 +326,34 @@ ui <- fluidPage(
                              ##  River Catchment Selector
                              selectInput(inputId = "catchment",
                                          label = "River Mgmt. Catchment:",
-                                         choices = as.list(c("All",
-                                                             levels(riv_cat$MNCAT_NAME))),
+                                         choices = c("", 
+                                                     unique(sensor_catchment_lookup$MNCAT_NAME)),
                                          ##  Default value
-                                         selected = "All"
+                                         selected = ""
                                          ##  TODO: Can allow for multiple selections, but will need to
                                          ##        make proper handling for creating the API query;
                                          ##        simple first
                              ),
-                             ##  TODO: Make this a drill down
-                             ##  Sensor Selector
-                             selectInput(inputId = "sensor",
-                                         label = "Sensor:",
-                                         choices = as.list(c("All",
-                                                             levels(tw_df_current$NAME))),
+                             ##  Receiving watercourse Selector
+                             selectInput(inputId = "recwat",
+                                         label = "Receiving Water Course:",
+                                         choices = c("", 
+                                                     unique(sensor_catchment_lookup$RECWATCOURS)),
                                          ##  Default value
-                                         selected = "All"
+                                         selected = ""
                                          ##  TODO: Can allow for multiple selections, but will need to
                                          ##        make proper handling for creating the API query;
                                          ##        simple first
-                             )
+                             ),
+                             
+                             ##  Sensor selector:
+                             selectInput(inputId = "sensor",
+                                         label = "Select all sensors of interest:",
+                                         choices = c("", unique(sensor_catchment_lookup$NAME)),
+                                         selected = "",
+                                         multiple = TRUE),
+                             ##  Button to reset the filters and such
+                             actionButton("reset", "Reset")
                              ##  sidebarPanel End  ---
                 ),
                 
@@ -360,16 +382,12 @@ ui <- fluidPage(
 server <- function(input, output, session) {
     ## TODO: LONGTERM - Examine how I can make the below things reactive.
     ## TODO: Calculate summary stats on the entire service area and by drainage basin/watercourse
-    ## TODO: Determine the length (in hours) of the last discharge event and rejoin to the main d
     ## TODO: Determine the average time between discharges for each sensor (will 
     ##       need to clean those lasting less than 30min and assume those are sensor errors)
-    ## TODO: Determine the number of discharge hours per 1000 operating hours
-    ## TODO: Figure out how to transform data into useful format for time plotting
+
+
     
-    
-    ##  USER REACTIVE INPUTS  --------------------------------------------------
-    ##  TODO: Finish these statements and carry out a reactive update of data 
-    ##  grabbing from the API.
+    ##  REACTIVE DATA QUERY  ---------------------------------------------------
     ##  Observe for changes in the input date range and grab them for formatting
     ##  in the API query and also store the river catchment for the local 
     ##  filtering of data:
@@ -378,161 +396,178 @@ server <- function(input, output, session) {
     enddate <- reactive({paste0(as.character(input$daterange[2]),
                                 "T00:00:00")})
     
-    curr_catchment <- reactive(input$catchment)
-    
-    
-    
-    
-    ##  REACTIVE DATA QUERY  ---------------------------------------------------
-    ##  Selection of River Catchment for dynamic plotting of historical data:
+    discharge_data_sf <- reactiveValues()
     ##  Data retrieval:
-    discharge_data_sf <- reactive({
-        ##  If there is no NA in the end date:
-        if(!stringr::str_detect(enddate(),"NA.*")){
-            ##    Set query parameters to retrieve the observations up to 48 
-            ##    hours from the present time:
-            params <- paste("limit=1000&",
-                            sprintf(tw_date_query_temp_start, 
-                                    "1", "1", "1",
-                                    startdate()),
-                            sprintf(tw_date_query_temp_end,
-                                    "2", "2", "2",
-                                    enddate()),
-                            sep="&")
-            ##  Make Initial API request:
-            res <- httr::GET(url = url_alert,
-                             httr::add_headers(client_id = client_id,
-                                               client_secret = client_secret),
-                             query = params) 
-            ##  Potential Error Handling 
-            if (httr::status_code(res) != 200){
-                showModal(modalDialog(paste("Request failed with status code: ", 
-                                            httr::status_code(res)),
-                                      "API Request Error",
-                                      footer = tagList(actionButton("ok","OK"))))
-                observeEvent(input$ok, {
-                    removeModal()
-                })
-            }else{
-                ##  Retrieve the content
-                foo_dis_dat <- res %>%
-                    ##  Retrieve content:
-                    httr::content() %>%
-                    purrr::pluck("items") %>% 
-                    dplyr::bind_rows()
-                ##  Make 2nd or more request if the original request is equal to
-                ##  the limit, i.e. check if there are more records to retrieve
-                if (nrow(foo_dis_dat) == 1000) {
-                    ##  Set a flag that there is possibly more records
-                    maybe_more <- TRUE
-                    ##  Set out API query offset parameter
-                    off_set <- nrow(foo_dis_dat)
-                    
-                    while (maybe_more) {
-                        ##    Set query parameters to retrieve the observations up to 48 
-                        ##    hours from the present time:
-                        params <- paste("limit=1000&",
-                                        sprintf("offset=%s&", off_set),
-                                        sprintf(tw_date_query_temp_start, 
-                                                "1", "1", "1",
-                                                startdate()),
-                                        sprintf(tw_date_query_temp_end,
-                                                "2", "2", "2",
-                                                enddate()),
-                                        sep="&")
-                        ##  Make additional API request:
-                        foo_res <- httr::GET(url = url_alert,
-                                             httr::add_headers(client_id = client_id,
-                                                               client_secret = client_secret),
-                                             query = params)
-                        ##  Check if the response is valid and nonempty
-                        ##  Potential Error Handling 
-                        if (httr::status_code(foo_res) != 200) {
-                            maybe_more <- FALSE
-                            showModal(modalDialog(paste("Additional requests failed with status code: ", 
-                                                        httr::status_code(foo_res)),
-                                                  "API Request Error",
-                                                  footer = tagList(actionButton("ok","OK"))))
-                            observeEvent(input$ok, {
-                                removeModal()
-                            })
-                        }else{
-                            ##  If valid check for non empty response:
-                            if (!is.null(httr::content(foo_res) %>% 
-                                         purrr::pluck("items"))) {
-                                ##  Process the additional data:
-                                foo_dis_dat <- foo_dis_dat %>%
-                                    rbind({httr::content(foo_res) %>% 
-                                            purrr::pluck("items") %>% 
-                                            dplyr::bind_rows()})
-                                ##  Repeat to see if there are more by changing 
-                                ##  the offset:
-                                off_set <- nrow(foo_dis_dat)
-                            }else{maybe_more <- FALSE}
-                        }
-                    }
-                }
+    observeEvent(
+        ##  If the date range changes
+        input$daterange,
+        {
+            ##  If there is no NA in the end date:
+            if(!stringr::str_detect(enddate(),"NA.*")){
+                ##    Set query parameters to retrieve the 
+                ##    observations 30 days prior from the 
+                ##    present date:
+                params <- paste("limit=1000&",
+                                sprintf(tw_date_query_temp_start, 
+                                        "1", "1", "1",
+                                        startdate()),
+                                sprintf(tw_date_query_temp_end,
+                                        "2", "2", "2",
+                                        enddate()),
+                                sep="&")
                 
-                dis_dat_sf <- foo_dis_dat %>%
-                    ##  Convert the column types:
-                    mutate(LocationName = factor(LocationName,
-                                                 levels = sort(unique(LocationName))),
-                           ReceivingWaterCourse = factor(ReceivingWaterCourse),
-                           AlertType = factor(AlertType),
-                           DateTime = as.POSIXct(DateTime,
-                                                 format="%Y-%m-%dT%H:%M:%S",
-                                                 tz=Sys.timezone()))%>%
-                    ##  Rename the columns:
-                    rename(GRIDREF = LocationGridRef,
-                           NAME = LocationName,
-                           PERMITNUM = PermitNumber,
-                           RECWATCOURS = ReceivingWaterCourse)%>%
-                    ##  Convert to sf object:
-                    st_as_sf(coords = c("X","Y"), crs = 27700) %>%
-                    ##  Convert to WGS84:
-                    st_transform(crs = 4326) %>%
-                    ##  Retrieve the WGS84 lat lon as numeric columns:
-                    mutate(LON = st_coordinates(.)[,1],
-                           LAT = st_coordinates(.)[,2]) %>%
-                    ##  Spatial join to the river catchments:
-                    # st_join(riv_cat) %>%
-                    ##  Replace NAs in MNCAT_NAME with "London" as that is their 
-                    ##  proper designation, but there is a 
-                    left_join(dplyr::select(sensor_catchment_lookup, !RECWATCOURS), 
-                              by = "NAME") %>%
-                    ##  Convert remaining columns as necessary:
-                    mutate(MNCAT_NAME = factor(MNCAT_NAME),
-                           NAME = factor(NAME))
-                
-                ##  If there is a subset by river catchments:
-                # cat(curr_catchment())
-                # print(head(dis_dat))
-                # print(curr_catchment() != "All")
-                if(curr_catchment() != "All"){
-                    dis_dat_sf <- dis_dat_sf %>%
-                        ##  Filter by river catchments:
-                        dplyr::filter(MNCAT_NAME %in% curr_catchment())
-                }
-                ##  Return the data:
-                return(dis_dat_sf)}
-        }
-    })
+                ##  Download the data from the API
+                foo_dis_dat <- tw_data_download(params, 
+                                                client_id,
+                                                client_secret)
+            }
+            
+            dis_dat_sf <- foo_dis_dat %>%
+                ##  Convert the column types:
+                mutate(LocationName = factor(LocationName,
+                                             levels = sort(unique(LocationName))),
+                       ReceivingWaterCourse = factor(ReceivingWaterCourse),
+                       AlertType = factor(AlertType),
+                       DateTime = as.POSIXct(DateTime,
+                                             format="%Y-%m-%dT%H:%M:%S",
+                                             tz=Sys.timezone())) %>%
+                ##  Rename the columns:
+                rename(GRIDREF = LocationGridRef,
+                       NAME = LocationName,
+                       PERMITNUM = PermitNumber,
+                       RECWATCOURS = ReceivingWaterCourse) %>%
+                ##  Convert to sf object:
+                st_as_sf(coords = c("X","Y"), crs = 27700) %>%
+                ##  Convert to WGS84:
+                st_transform(crs = 4326) %>%
+                ##  Retrieve the WGS84 lat lon as numeric columns:
+                mutate(LON = st_coordinates(.)[,1],
+                       LAT = st_coordinates(.)[,2]) %>%
+                ##  Replace NAs in MNCAT_NAME with "London" as that is their 
+                ##  proper designation, but there is a 
+                left_join(dplyr::select(sensor_catchment_lookup, !RECWATCOURS), 
+                          by = "NAME") %>%
+                ##  Convert remaining columns as necessary:
+                mutate(MNCAT_NAME = factor(MNCAT_NAME),
+                       NAME = factor(NAME))
+            
+            
+            ##  Return the data:
+            discharge_data_sf$data <- dis_dat_sf
+            ##   Make a static main copy for revised subsets
+            discharge_data_sf$static <- dis_dat_sf
+        })
     
     
+    ##  Reactive filtering and option updates based upon user inputs  ---
+    ##    Catchment selection change  ---
+    observeEvent(input$catchment, 
+                 {
+                     ##  If it is not the default non-selection value
+                     if(input$catchment != "") {
+                         ##  Filter the data
+                         discharge_data_sf$data <- discharge_data_sf$static %>% 
+                             dplyr::filter(MNCAT_NAME %in% input$catchment)
+                         ##  Reset our rec wat and sensor values while filtering
+                         ##  and updating their choices:
+                         updateSelectInput(session, "recwat", 
+                                           selected = "",
+                                           choices = c("", 
+                                                       {discharge_data_sf$data %>%
+                                                               pull(RECWATCOURS) %>%
+                                                               as.character() %>%
+                                                               unique()}))
+                         updateSelectInput(session, "sensor", 
+                                           selected = "",
+                                           choices = c("", 
+                                                       {discharge_data_sf$data %>%
+                                                               pull(NAME) %>%
+                                                               as.character() %>%
+                                                               unique()}))
+                     }
+                 }
+    )
+    
+    ##    Receiving Watercourse selection change  ---
+    observeEvent(input$recwat, 
+                 {
+                     ##  If it is not the default non-selection value
+                     if(input$recwat != "") {
+                         ##  Filter the data
+                         discharge_data_sf$data <- discharge_data_sf$static %>% 
+                             dplyr::filter(RECWATCOURS %in% input$recwat)
+                         
+                         ##  Reset the sensor selection value and update the 
+                         ##  choices
+                         updateSelectInput(session, 
+                                           "sensor",
+                                           selected = "",
+                                           choices = c("", 
+                                                       {discharge_data_sf$data %>%
+                                                               pull(NAME) %>%
+                                                               as.character() %>%
+                                                               unique()}))
+                         
+                         ##  Update the catchment input value to match:
+                         updateSelectInput(session, "catchment", 
+                                           choices = c("",
+                                                       {discharge_data_sf$data %>%
+                                                               dplyr::filter(RECWATCOURS %in% input$recwat) %>%
+                                                               pull(MNCAT_NAME) %>%
+                                                               as.character() %>%
+                                                               unique()}))
+                     }
+                 }
+    )
     
     
-    ##  Update the potential sensors to select from based upon the selected 
-    ##  catchment which was used to filter discharge_data_sf
-    out_var_sensors <- reactive({c( "All", 
-                                    {discharge_data_sf() %>% 
-                                            mutate(across(where(is.factor),
-                                                          as.character)) %>%
-                                            pull(NAME) %>%
-                                            unique()} )})
-    ##    Update the selection list in the UI:
-    observe({updateSelectInput(session = session,
-                               "sensor",
-                               choices = out_var_sensors())})
+
+    ##  If the sensor value(s) change:
+    observeEvent(input$sensor, 
+                 {
+                     ##  If the default non-selection value is not in the selection:
+                     if( !{"" %in% input$sensor}) {
+                         ##  Filter the data
+                         discharge_data_sf$data <- discharge_data_sf$static %>%
+                             dplyr::filter(case_when(input$catchment == "" & 
+                                                         input$recwat != "" ~
+                                                         RECWATCOURS %in% input$recwat &
+                                                         NAME %in% input$sensor,
+                                                     input$catchment != "" & 
+                                                         input$recwat == "" ~
+                                                         MNCAT_NAME %in% input$catchment &
+                                                         NAME %in% input$sensor,
+                                                     input$catchment != "" & 
+                                                         input$recwat != "" ~
+                                                         MNCAT_NAME %in% input$catchment &
+                                                         RECWATCOURS %in% input$recwat &
+                                                         NAME %in% input$sensor,
+                                                     ##  If both the catchment 
+                                                     ##  and the receiving 
+                                                     ##  watercourse are "" then
+                                                     ##  just filter by the name
+                                                     TRUE ~ NAME %in% input$sensor)
+                                           
+                                           )
+                         ##  But do not change the available options for sensor selection; that 
+                         ##  only happens with the selection of a receiving water course or 
+                         ##  catchment area
+                     }
+                 }
+    )
+    
+    ##  If reset button is hit, reset our filters and dates which will trigger 
+    ##  the discharge_data_sf block above
+    observeEvent(input$reset,
+                 {
+                     ##  If the button is hit, then reset the filtering values to 
+                     ##  their default of "" and the filtering dates to the defaults
+                     updateSelectInput(session, "catchment", selected = "")
+                     updateSelectInput(session, "recwat", selected = "")
+                     updateSelectInput(session, "sensor", selected = "")
+                     updateDateRangeInput(start = Sys.Date()-30,
+                                          end = Sys.Date())
+                 })
     
     
     
@@ -541,7 +576,7 @@ server <- function(input, output, session) {
     discharge_data_df <- reactive({
         ##  Only calc if the end date is not null
         if (!stringr::str_detect(enddate(),"NA.*")) {
-            dis_dat_df <- discharge_data_sf() %>% 
+            dis_dat_df <- discharge_data_sf$data %>% 
                 st_drop_geometry() %>%
                 ##  Rename columns for presenting:
                 dplyr::rename("Sensor Name" = NAME,
@@ -567,7 +602,7 @@ server <- function(input, output, session) {
         ##  If there is no NA in the end date:
         if(!stringr::str_detect(enddate(),"NA.*")){
             ## Create the time data:
-            dis_time <- discharge_data_sf() %>%
+            dis_time <- discharge_data_sf$data %>%
                 ##  Drop geometry:
                 st_drop_geometry() %>%
                 ##  Subset columns:
@@ -647,7 +682,7 @@ server <- function(input, output, session) {
     ##  Event duration data classified by type:
     tot_operating_hours <- reactive({
         if(!stringr::str_detect(enddate(),"NA.*")){
-            sensor_prop_df <- discharge_data_sf() %>%
+            sensor_prop_df <- discharge_data_sf$data %>%
                 ##  Drop geometry:
                 st_drop_geometry() %>%
                 ##  Subset columns:
@@ -696,7 +731,7 @@ server <- function(input, output, session) {
     
     sensor_prop_status_df <- reactive({
         if(!stringr::str_detect(enddate(),"NA.*")){
-            sensor_prop_df <- discharge_data_sf() %>%
+            sensor_prop_df <- discharge_data_sf$data %>%
                 ##  Drop geometry:
                 st_drop_geometry() %>%
                 ##  Subset columns:
@@ -907,7 +942,7 @@ server <- function(input, output, session) {
     
     ##  EVENT TIME PLOT (DUMBBELL)
     output$timeline <- renderPlotly({
-        plot_ly(discharge_time_df(),
+        plot_ly(droplevels(discharge_time_df()),
                 color = ~PERIOD_CLASS,
                 colors = c("tomato3","#707070","#eeb744")) %>%
             add_segments(x = ~PERIOD_START,
@@ -948,115 +983,115 @@ server <- function(input, output, session) {
         
     
     ##  VIOLINPLOT (RIDGEPLOT) OF EVENT DURATIONS
-    output$event_vio <- renderPlotly({
-        foo_vio_1 <- plot_ly(type = "violin",
-                             x = filter(sensor_hour_df(),
-                                        OPTYPE == "Offline") %>% pull(TIME),
-                             color = I("#707070"),
-                             side = "positive",
-                             box = list(visible = TRUE),
-                             meanline = list(visible = TRUE))%>%
-            layout(xaxis = list(title = "Event Duration (Hours)"),
-                   yaxis = list(title = "Frequency"),
-                   domain = list(x = c(0,1), y = c(0.8,1.0)))
-        foo_vio_2 <- plot_ly(type = "violin",
-                             x = filter(sensor_hour_df(),
-                                        OPTYPE == "Discharge") %>% pull(TIME),
-                             color = I({rgb(t(col2rgb("tomato3"))/255)}),
-                             side = "positive",
-                             box = list(visible = TRUE),
-                             meanline = list(visible = TRUE))%>%
-            layout(xaxis = list(title = "Event Duration (Hours)"),
-                   yaxis = list(title = "Frequency"),
-                   domain = list(x = c(0,1), y = c(0.6,0.8)))
-        foo_vio_3 <- plot_ly(type = "violin",
-                             x = filter(sensor_hour_df(),
-                                        OPTYPE == "Regular Operation") %>% pull(TIME),
-                             color = I("#58b6d2"),
-                             side = "positive",
-                             box = list(visible = TRUE),
-                             meanline = list(visible = TRUE))%>%
-            layout(xaxis = list(title = "Event Duration (Hours)"),
-                   yaxis = list(title = "Frequency"),
-                   domain = list(x = c(0,1), y = c(0.4,0.6)))
-        foo_vio_4 <- plot_ly(type = "violin",
-                             x = filter(sensor_hour_df(),
-                                        OPTYPE == "SemiRegular Operation") %>% pull(TIME),
-                             color = I("#004b6c"),
-                             side = "positive",
-                             box = list(visible = TRUE),
-                             meanline = list(visible = TRUE)) %>%
-            layout(xaxis = list(title = "Event Duration (Hours)"),
-                   yaxis = list(title = "Frequency"),
-                   domain = list(x = c(0,1), y = c(0.2,0.4)))
-        foo_vio_5 <- plot_ly(type = "violin",
-                             x = filter(sensor_hour_df(),
-                                        OPTYPE == "Est. Regular Operation") %>% pull(TIME),
-                             color = I("#00b5ee"),
-                             side = "positive",
-                             box = list(visible = TRUE),
-                             meanline = list(visible = TRUE)) %>%
-            layout(xaxis = list(title = "Event Duration (Hours)"),
-                   yaxis = list(title = "Frequency"),
-                   domain = list(x = c(0,1), y = c(0.0,0.2)))
-        
-        ##  Create a 1x5 (rc) series of subplots
-        subplot(list(foo_vio_1, foo_vio_2,
-                     foo_vio_3, foo_vio_4,
-                     foo_vio_5),
-                nrows = 5, 
-                titleX = TRUE,
-                titleY = TRUE,
-                margin = 0.1,
-                heights = c(0.2, 
-                            0.2,
-                            0.2,
-                            0.2,
-                            0.2)) %>%
-            ##  Update subplot titles locations and such
-            layout(annotations = list( 
-                list(x = 0.2,  
-                     y = 1.0,  
-                     text = "Offline",  
-                     xref = "paper",  
-                     yref = "paper",  
-                     xanchor = "center",  
-                     yanchor = "bottom",  
-                     showarrow = FALSE),  
-                list(x = 0.2,  
-                     y = 1.0,  
-                     text = "Discharge",  
-                     xref = "paper",  
-                     yref = "paper",  
-                     xanchor = "center",  
-                     yanchor = "bottom",  
-                     showarrow = FALSE),  
-                list(x = 0.2,  
-                     y = 1.0,  
-                     text = "Regular Operations",  
-                     xref = "paper",  
-                     yref = "paper",  
-                     xanchor = "center",  
-                     yanchor = "bottom",  
-                     showarrow = FALSE),  
-                list(x = 0.2,  
-                     y = 1.0,  
-                     text = "SemiRegular Operation",  
-                     xref = "paper",  
-                     yref = "paper",  
-                     xanchor = "center",  
-                     yanchor = "bottom",  
-                     showarrow = FALSE),  
-                list(x = 0.2,  
-                     y = 1.0,  
-                     text = "Est. Regular Operation",  
-                     xref = "paper",  
-                     yref = "paper",  
-                     xanchor = "center",  
-                     yanchor = "bottom",  
-                     showarrow = FALSE)
-                ))
-    })
+    # output$event_vio <- renderPlotly({
+    #     foo_vio_1 <- plot_ly(type = "violin",
+    #                          x = filter(sensor_hour_df(),
+    #                                     OPTYPE == "Offline") %>% pull(TIME),
+    #                          color = I("#707070"),
+    #                          side = "positive",
+    #                          box = list(visible = TRUE),
+    #                          meanline = list(visible = TRUE),
+    #                          domain = list(x = c(0,1), y = c(0.8,1.0))) %>%
+    #         layout(xaxis = list(title = "Event Duration (Hours)"),
+    #                yaxis = list(title = "Frequency"))
+    #     foo_vio_2 <- plot_ly(type = "violin",
+    #                          x = filter(sensor_hour_df(),
+    #                                     OPTYPE == "Discharge") %>% pull(TIME),
+    #                          color = I({rgb(t(col2rgb("tomato3"))/255)}),
+    #                          side = "positive",
+    #                          box = list(visible = TRUE),
+    #                          meanline = list(visible = TRUE),
+    #                          domain = list(x = c(0,1), y = c(0.6,0.8))) %>%
+    #         layout(xaxis = list(title = "Event Duration (Hours)"),
+    #                yaxis = list(title = "Frequency"))
+    #     foo_vio_3 <- plot_ly(type = "violin",
+    #                          x = filter(sensor_hour_df(),
+    #                                     OPTYPE == "Regular Operation") %>% pull(TIME),
+    #                          color = I("#58b6d2"),
+    #                          side = "positive",
+    #                          box = list(visible = TRUE),
+    #                          meanline = list(visible = TRUE),
+    #                          domain = list(x = c(0,1), y = c(0.4,0.6))) %>%
+    #         layout(xaxis = list(title = "Event Duration (Hours)"),
+    #                yaxis = list(title = "Frequency"))
+    #     foo_vio_4 <- plot_ly(type = "violin",
+    #                          x = filter(sensor_hour_df(),
+    #                                     OPTYPE == "SemiRegular Operation") %>% pull(TIME),
+    #                          color = I("#004b6c"),
+    #                          side = "positive",
+    #                          box = list(visible = TRUE),
+    #                          meanline = list(visible = TRUE),
+    #                          domain = list(x = c(0,1), y = c(0.2,0.4))) %>%
+    #         layout(xaxis = list(title = "Event Duration (Hours)"),
+    #                yaxis = list(title = "Frequency"))
+    #     foo_vio_5 <- plot_ly(type = "violin",
+    #                          x = filter(sensor_hour_df(),
+    #                                     OPTYPE == "Est. Regular Operation") %>% pull(TIME),
+    #                          color = I("#00b5ee"),
+    #                          side = "positive",
+    #                          box = list(visible = TRUE),
+    #                          meanline = list(visible = TRUE),
+    #                          domain = list(x = c(0,1), y = c(0.0,0.2))) %>%
+    #         layout(xaxis = list(title = "Event Duration (Hours)"),
+    #                yaxis = list(title = "Frequency"))
+    #     
+    #     ##  Create a 1x5 (rc) series of subplots
+    #     subplot(list(foo_vio_1, foo_vio_2,
+    #                  foo_vio_3, foo_vio_4,
+    #                  foo_vio_5),
+    #             nrows = 5, 
+    #             titleX = TRUE,
+    #             titleY = TRUE,
+    #             margin = 0.1,
+    #             heights = c(0.2, 
+    #                         0.2,
+    #                         0.2,
+    #                         0.2,
+    #                         0.2)) %>%
+    #         ##  Update subplot titles locations and such
+    #         layout(annotations = list( 
+    #             list(x = 0.2,  
+    #                  y = 1.0,  
+    #                  text = "Offline",  
+    #                  xref = "paper",  
+    #                  yref = "paper",  
+    #                  xanchor = "center",  
+    #                  yanchor = "bottom",  
+    #                  showarrow = FALSE),  
+    #             list(x = 0.2,  
+    #                  y = 1.0,  
+    #                  text = "Discharge",  
+    #                  xref = "paper",  
+    #                  yref = "paper",  
+    #                  xanchor = "center",  
+    #                  yanchor = "bottom",  
+    #                  showarrow = FALSE),  
+    #             list(x = 0.2,  
+    #                  y = 1.0,  
+    #                  text = "Regular Operations",  
+    #                  xref = "paper",  
+    #                  yref = "paper",  
+    #                  xanchor = "center",  
+    #                  yanchor = "bottom",  
+    #                  showarrow = FALSE),  
+    #             list(x = 0.2,  
+    #                  y = 1.0,  
+    #                  text = "SemiRegular Operation",  
+    #                  xref = "paper",  
+    #                  yref = "paper",  
+    #                  xanchor = "center",  
+    #                  yanchor = "bottom",  
+    #                  showarrow = FALSE),  
+    #             list(x = 0.2,  
+    #                  y = 1.0,  
+    #                  text = "Est. Regular Operation",  
+    #                  xref = "paper",  
+    #                  yref = "paper",  
+    #                  xanchor = "center",  
+    #                  yanchor = "bottom",  
+    #                  showarrow = FALSE)
+    #             ))
+    # })
     
     
     

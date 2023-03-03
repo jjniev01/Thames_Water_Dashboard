@@ -599,13 +599,28 @@ server <- function(input, output, session) {
                  {
                      ##  If the button is hit, then reset the filtering values to 
                      ##  their default of "" and the filtering dates to the defaults
-                     updateSelectInput(session, "catchment", selected = "")
-                     updateSelectInput(session, "recwat", selected = "")
-                     updateSelectInput(session, "sensor", selected = "")
+                     updateSelectInput(session, "catchment", 
+                                       selected = "",
+                                       choices = c("", 
+                                                   unique(sensor_catchment_lookup$MNCAT_NAME)))
+                     updateSelectInput(session, "recwat",
+                                       selected = "",
+                                       choices = c("", 
+                                                   unique(sensor_catchment_lookup$RECWATCOURS)))
+                     updateSelectInput(session, "sensor", 
+                                       selected = "",
+                                       choices = c("", 
+                                                   unique(sensor_catchment_lookup$NAME)))
                      updateDateRangeInput(session,
                                           "daterange",
                                           start = Sys.Date()-30,
                                           end = Sys.Date())
+                     ##  Reset the presented data to the static copy;
+                     ##  note this serves as the main reset of data 
+                     ##  presentations if the date never changed and if it has, 
+                     ##  it doesn't change anything from the reactive reset that
+                     ##  would happen from a change of the date
+                     discharge_data_sf$data <- discharge_data_sf$static
                  })
     
     
